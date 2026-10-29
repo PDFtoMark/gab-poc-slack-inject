@@ -1,0 +1,69 @@
+name: Slack Notifications
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: 'Simulates github.event.issue.title (attacker controlled)'
+        required: true
+      body:
+        description: 'Simulates github.event.comment.body (attacker controlled)'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send issue notification to Slack (issues path, title injection)
+        id: notify_title
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+        with:
+          webhook: https://httpbin.org/post
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "type": "issue_update",
+              "action": "opened",
+              "number": 1,
+              "title": "${{ inputs.title }}",
+              "url": "https://github.com/kubernetes-sigs/aws-efs-csi-driver/issues/1",
+              "user": "attacker"
+            }
+
+      - name: Send issue comments notification to Slack (comment body injection)
+        id: notify_comment
+        if: inputs.body != ''
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+        continue-on-error: true
+        with:
+          webhook: https://httpbin.org/post
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "type": "issue_comment",
+              "action": "created",
+              "number": 1,
+              "title": "some issue title",
+              "url": "https://github.com/kubernetes-sigs/aws-efs-csi-driver/issues/1#issuecomment-1",
+              "body": "${{ inputs.body }}",
+              "user": "attacker"
+            }
+
+      - name: Show the exact JSON body received by the webhook endpoint
+        if: always()
+        env:
+          RESP_TITLE: ${{ steps.notify_title.outputs.response }}
+          RESP_COMMENT: ${{ steps.notify_comment.outputs.response }}
+          OK_TITLE: ${{ steps.notify_title.outputs.ok }}
+        run: |
+          echo "action ok output (title path): $OK_TITLE"
+          echo "=== body received at webhook endpoint (title path) ==="
+          printf '%s' "$RESP_TITLE" | jq -r '.json // .data // .' || echo "no parseable echo"
+          echo "=== injected keys (title path) ==="
+          printf '%s' "$RESP_TITLE" | jq -r '.json | keys' || true
+          echo "=== injected keys (comment path) ==="
+          printf '%s' "$RESP_COMMENT" | jq -r '.json | keys' || true
+          echo "=== injected text (comment path) ==="
+          printf '%s' "$RESP_COMMENT" | jq -r '.json.text // empty' || true
