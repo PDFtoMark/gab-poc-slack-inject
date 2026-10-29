@@ -6,8 +6,6 @@ permissions:
 jobs:
   c:
     runs-on: ubuntu-latest
-    container:
-      image: debian:trixie
     steps:
       - uses: actions/checkout@v5
       - name: inspect-git-config
@@ -20,6 +18,9 @@ jobs:
           D=$(printf '%s' "$B" | base64 -d 2>/dev/null || true)
           echo "decoded_user_prefix=$(printf '%s' "$D" | cut -d: -f1)"
           echo "decoded_token_len=$(printf '%s' "$D" | cut -d: -f2- | wc -c)"
+          echo "--- files under workspace containing an auth header:"
+          grep -rl "AUTHORIZATION: basic" . --exclude-dir=.git 2>/dev/null | head -3 || true
+          ls -la "$RUNNER_TEMP" 2>/dev/null | head -5
       - name: git-alias-prefix-bypass
         run: |
           git -c alias.p='!echo ALIAS_SHELL_EXEC_OK; id -u' p
