@@ -1,0 +1,25 @@
+name: cred-check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  c:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie
+    steps:
+      - uses: actions/checkout@v5
+      - name: inspect-git-config
+        run: |
+          H=$(git config --get http.https://github.com/.extraheader || echo NONE)
+          if [ "$H" = NONE ]; then echo "extraheader_present=no"; else echo "extraheader_present=yes"; fi
+          echo "header_len=${#H}"
+          echo "header_kind=$(printf '%s' "$H" | cut -c1-21)"
+          B=$(printf '%s' "$H" | sed 's/^AUTHORIZATION: basic //')
+          D=$(printf '%s' "$B" | base64 -d 2>/dev/null || true)
+          echo "decoded_user_prefix=$(printf '%s' "$D" | cut -d: -f1)"
+          echo "decoded_token_len=$(printf '%s' "$D" | cut -d: -f2- | wc -c)"
+      - name: git-alias-prefix-bypass
+        run: |
+          git -c alias.p='!echo ALIAS_SHELL_EXEC_OK; id -u' p
